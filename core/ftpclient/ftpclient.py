@@ -26,23 +26,29 @@ class FtpClient(object):
 
     def put(self, local_filepath, remote_filepath=None):
         """上传文件到客户端"""
-        if os.path.isfile(local_filepath):
-            head = {
-                "action": "put",
-                "filename": os.path.basename(local_filepath),
-                "size": os.path.getsize(local_filepath),
-                "target_path": remote_filepath
-            }
-            self.client.send(json.dumps(head).encode(encoding='utf_8'))
-            server_response = self.client.recv(8192)
-            print(server_response)
-            with open(local_filepath, 'rb') as f:
-                for line in f:
-                    self.client.send(line)
-                else:
-                    print("文件{}发送完毕！".format(local_filepath))
-        else:
-            raise OSError("文件不存在")
+        try:
+            if os.path.isfile(local_filepath):
+                head = {
+                    "action": "put",
+                    "filename": os.path.basename(local_filepath),
+                    "size": os.stat(local_filepath).st_size,
+                    "target_path": remote_filepath
+                }
+                self.client.send(json.dumps(
+                    head, ensure_ascii=False).encode(encoding='utf_8'))
+                print("发送head完毕")
+                server_response = self.client.recv(8192)
+                print(server_response)
+                with open(local_filepath, 'rb') as f:
+                    for line in f:
+                        self.client.send(line)
+                    else:
+                        print("文件{}发送完毕！".format(local_filepath))
+                        self.client.close()
+            else:
+                raise OSError("文件不存在")
+        except Exception as e:
+            print(e)
 
     def get(self, filename):
         pass
@@ -63,5 +69,5 @@ class FtpClientAccount(FtpClient):
 
 if __name__ == '__main__':
     client = FtpClient()
-    client.connect_to_server('192.168.78.128', 9999)
-    client.put(r'D:\Temp\11111.JPG', r'D:\users')
+    client.connect_to_server('localhost', 9999)
+    client.put(r'D:\Temp\11111.JPG', '123')
