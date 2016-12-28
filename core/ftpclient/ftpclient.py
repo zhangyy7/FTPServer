@@ -24,7 +24,7 @@ class FtpClient(object):
         else:
             raise AttributeError("指令不正确")
 
-    def put(self, local_filepath, remote_filepath):
+    def put(self, local_filepath, remote_filepath=None):
         """上传文件到客户端"""
         if os.path.isfile(local_filepath):
             head = {
