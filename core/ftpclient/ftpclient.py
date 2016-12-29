@@ -39,12 +39,19 @@ class FtpClient(object):
                 print("发送head完毕")
                 server_response = self.client.recv(8192)
                 print(server_response)
+                m = hashlib.md5()
                 with open(local_filepath, 'rb') as f:
                     for line in f:
+                        m.update(line)
                         self.client.send(line)
                     else:
+                        file_md5 = m.hexdigest()
                         print("文件{}发送完毕！".format(local_filepath))
-                        self.client.close()
+                self.client.send(file_md5.encode('utf-8'))
+                server_file_md5 = self.client.recv(1024).decode('utf-8')
+                print(server_file_md5, file_md5)
+                if server_file_md5 == file_md5:
+                    return True
             else:
                 raise OSError("文件不存在")
         except Exception as e:
@@ -70,4 +77,4 @@ class FtpClientAccount(FtpClient):
 if __name__ == '__main__':
     client = FtpClient()
     client.connect_to_server('localhost', 9999)
-    client.put(r'/home/zhangyy/11111.txt', '123')
+    client.put(r'D:\Temp\11111.JPG', '123')
