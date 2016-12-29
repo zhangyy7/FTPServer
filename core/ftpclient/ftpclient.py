@@ -70,4 +70,4 @@ class FtpClientAccount(FtpClient):
 if __name__ == '__main__':
     client = FtpClient()
     client.connect_to_server('localhost', 9999)
-    client.put(r'D:\Temp\11111.JPG', '123')
+    client.put(r'/home/zhangyy/11111.txt', '123')
