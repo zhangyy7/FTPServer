@@ -73,6 +73,32 @@ class FtpServer(socketserver.BaseRequestHandler):
             stat_code = '9997'
         self.request.send(stat_code.encode('utf-8'))
 
+    def get(self, cmd_dict):
+        """处理客户端下载文件的请求"""
+        filepath = cmd_dict.get("filepath", 0)
+        if not os.path.isfile(filepath):
+            self.request.send(b'9995')
+        else:
+            filename = os.path.basename(filepath)
+            filesize = os.path.getsize(filepath)
+            head_dict = {"filename": filename, "size": filesize}
+            head = json.dumps(head_dict, ensure_ascii=False)
+            self.request.send(head.encode())  # 文件信息给客户端
+        client_status_code = self.request.recv(1024).decode()
+        if client_status_code == "0000":
+            m = hashlib.md5()
+            with open(filepath, 'rb') as f:
+                for line in f:
+                    m.update(line)
+                    self.request.send(line)
+                else:
+                    file_md5 = m.hexdigest()
+                    print("文件发送完毕！")
+        if self.request.recv(1024).decode() == "0000":
+            self.request.send(file_md5.encode())
+        else:
+            return
+
 
 if __name__ == '__main__':
     server = socketserver.ThreadingTCPServer(('0.0.0.0', 9999), FtpServer)

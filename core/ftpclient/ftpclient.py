@@ -9,8 +9,9 @@ import json
 class FtpClient(object):
     """ftp客户端"""
 
-    def __init__(self):
+    def __init__(self, ip, port):
         self.client = socket.socket()
+        self.connect_to_server(ip, port)
 
     def connect_to_server(self, ip, port):
         self.client.connect((ip, port))
@@ -30,8 +31,8 @@ class FtpClient(object):
             if os.path.isfile(local_filepath):
                 head = {
                     "action": "put",
-                    "filename": os.path.basename(local_filepath),
-                    "size": os.stat(local_filepath).st_size,
+                    "filename": os.path.basename(local_filepath),  # 获取文件名
+                    "size": os.path.getsize(local_filepath),  # 获取文件大小
                     "target_path": remote_filepath
                 }
                 self.client.send(json.dumps(
@@ -57,18 +58,61 @@ class FtpClient(object):
         except Exception as e:
             print(e)
 
-    def get(self, filename):
-        pass
+    def get(self, remote_filepath, local_file_path):
+        """从服务端下载文件"""
+        head = {
+            "action": "get",
+            "filepath": remote_filepath
+        }
+        self.client.send(json.dumps(head).encode('utf-8'))  # 发送下载请求
+        server_response = self.client.recv(1024).decode('utf-8')
+        if server_response == '9995':  # 服务端返回异常状态码
+            return
+        else:  # 服务端返回的不是异常状态
+            head_dict = json.load(server_response)
+            server_file_name = head_dict.get("filename", 0)
+            try:
+                server_file_size = int(head_dict.get("size", 0))
+            except ValueError as e:
+                print(e)
+                return
+            if all((server_file_name, server_file_size)):  # 判断服务端返回的2个数据是否正常
+                self.client.send("0000".encode())  # 告诉服务端我已经准备好接收文件了
+            else:
+                return self.client.send('9999'.encode())  # 告诉服务端发给我的数据有异常
+            m = hashlib.md5()
+            with open(
+                    os.path.join(
+                        'local_file_path', 'server_file_name', 'wb')) as f:
+                recv_size = 0
+                while recv_size < server_file_size:  # 开始接收文件
+                    data = self.client.recv(
+                        min(1024, server_file_size - recv_size))
+                    m.update(data)
+                    f.write(data)
+                else:
+                    print("文件接收完毕")
+            self.client.send("0000".encode())  # 告诉服务器我已经接收完毕了
+            recv_file_md5 = m.hexdigest()
+            server_file_md5 = self.client.recv(1024).decode()
+            print(recv_file_md5, server_file_md5)
+            if recv_file_md5 == server_file_md5:
+                return "0000"
+            else:
+                pass
 
 
 class FtpClientAccount(FtpClient):
     """ftp客户端账户类"""
 
-    def __init__(self):
-        pass
-
     def register(self, username, password):
         """用户注册"""
+        info_dict = {
+            "action": "register",
+            "username": username,
+            "password": password
+        }
+        self.client.send(json.dumps(info_dict, ensure_ascii=False).encode())
 
     def login(self, username, password):
         pass
