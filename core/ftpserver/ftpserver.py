@@ -21,7 +21,7 @@ class FtpServer(socketserver.BaseRequestHandler):
                     break
                 head_str = head.decode()
                 head_dict = json.loads(head_str)
-                print("size:", head_dict["size"], type(head_dict["size"]))
+                # print("size:", head_dict["size"], type(head_dict["size"]))
                 action = head_dict.get("action", 0)
                 if not action:
                     self.request.send(b'9999')
@@ -94,10 +94,12 @@ class FtpServer(socketserver.BaseRequestHandler):
                 else:
                     file_md5 = m.hexdigest()
                     print("文件发送完毕！")
-        if self.request.recv(1024).decode() == "0000":
-            self.request.send(file_md5.encode())
+            if self.request.recv(1024).decode() == "0000":
+                self.request.send(file_md5.encode())
         else:
             return
+
+    def other_cmd(self, cmd):
 
 
 if __name__ == '__main__':
