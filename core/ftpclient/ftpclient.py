@@ -69,7 +69,7 @@ class FtpClient(object):
         if server_response == '9995':  # 服务端返回异常状态码
             return
         else:  # 服务端返回的不是异常状态
-            head_dict = json.load(server_response)
+            head_dict = json.loads(server_response)
             server_file_name = head_dict.get("filename", 0)
             try:
                 server_file_size = int(head_dict.get("size", 0))
@@ -81,17 +81,18 @@ class FtpClient(object):
             else:
                 return self.client.send('9999'.encode())  # 告诉服务端发给我的数据有异常
             m = hashlib.md5()
-            with open(
-                    os.path.join(
-                        'local_file_path', 'server_file_name', 'wb')) as f:
+            with open(os.path.join(local_file_path, server_file_name), 'wb') as f:
                 recv_size = 0
                 while recv_size < server_file_size:  # 开始接收文件
                     data = self.client.recv(
                         min(1024, server_file_size - recv_size))
+                    if not data:
+                        break
                     m.update(data)
                     f.write(data)
+                    recv_size += len(data)
                 else:
-                    print("文件接收完毕")
+                    print("文件接收完毕！")
             self.client.send("0000".encode())  # 告诉服务器我已经接收完毕了
             recv_file_md5 = m.hexdigest()
             server_file_md5 = self.client.recv(1024).decode()
@@ -113,12 +114,19 @@ class FtpClientAccount(FtpClient):
             "password": password
         }
         self.client.send(json.dumps(info_dict, ensure_ascii=False).encode())
+        return self.client.recv(1024).decode()
 
     def login(self, username, password):
-        pass
+        info_dict = {
+            "action": "login",
+            "username": username,
+            "password": password
+        }
+        self.client.send(json.dumps(info_dict).encode())
+        return self.client.recv(1024).decode()
 
 
 if __name__ == '__main__':
-    client = FtpClient('192.168.1.111', 9999)
-    # client.put(r'E:\python\pythonshouce.zip', '123')
-    client.get(r'pythonshouce.zip', r'E:\python\hardway')
+    client = FtpClient('localhost', 9999)
+    # client.put(r'D:\Temp\11111.JPG', '123')
+    client.get(r'11111.JPG', r'D:\QMDownload')
