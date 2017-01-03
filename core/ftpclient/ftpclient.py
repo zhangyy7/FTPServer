@@ -119,6 +119,6 @@ class FtpClientAccount(FtpClient):
 
 
 if __name__ == '__main__':
-    client = FtpClient()
-    client.connect_to_server('localhost', 9999)
-    client.put(r'D:\Temp\11111.JPG', '123')
+    client = FtpClient('192.168.1.111', 9999)
+    # client.put(r'E:\python\pythonshouce.zip', '123')
+    client.get(r'pythonshouce.zip', r'E:\python\hardway')

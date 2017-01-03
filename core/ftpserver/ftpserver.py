@@ -2,9 +2,17 @@
 # -*-coding: utf-8 -*-
 import socketserver
 import os
+import sys
 import json
 import time
 import hashlib
+
+base_dir = os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(base_dir)
+
+
+from conf import settings
 
 
 class FtpServer(socketserver.BaseRequestHandler):
@@ -76,7 +84,7 @@ class FtpServer(socketserver.BaseRequestHandler):
     def get(self, cmd_dict):
         """处理客户端下载文件的请求"""
         filepath = cmd_dict.get("filepath", 0)
-        if not os.path.isfile(filepath):
+        if not os.path.isfile(os.path.join(settings.HOME_PATH, filepath)):
             self.request.send(b'9995')
         else:
             filename = os.path.basename(filepath)
@@ -100,6 +108,7 @@ class FtpServer(socketserver.BaseRequestHandler):
             return
 
     def other_cmd(self, cmd):
+        pass
 
 
 if __name__ == '__main__':
