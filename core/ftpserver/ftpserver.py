@@ -141,9 +141,14 @@ class FtpServer(socketserver.BaseRequestHandler):
         if all((client_username == username, client_password == password)):
             self.client_home = os.path.join(
                 settings.HOME_PATH, client_username)
-            return self.request.send(b'0000')
+            status_code = '0000'
         else:
-            return self.request.send(b'8000')  # 用户名或密码不正确
+            status_code = '8000'  # 用户名或密码不正确
+        msg_dict = {"status_code": status_code, "dir": self.client_home}
+        msg = json.dumps(msg_dict, ensure_ascii=False).encode()
+        self.request.send(str(len(msg)).encode())
+        self.request.recv(1024)
+        return self.request.send(json.dumps(msg, ensure_ascii=False).encode())
 
     def other_cmd(self, cmd):
         pass

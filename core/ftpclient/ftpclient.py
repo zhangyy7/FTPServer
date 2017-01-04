@@ -18,15 +18,16 @@ class FtpClient(object):
 
     def route(self, cmd):
         """判断cmd是否存在，存在则执行cmd指令"""
-        action, filepath = cmd.split()
+        action, *_ = cmd.split()
         if hasattr(self, action):
             func = getattr(self, action)
-            return func(self, filepath)
+            return func(self, cmd)
         else:
             raise AttributeError("指令不正确")
 
-    def put(self, local_filepath, remote_filepath=None):
+    def put(self, cmd):
         """上传文件到客户端"""
+        cmd, local_filepath, *remote_filepath = cmd.strip().split()
         try:
             if os.path.isfile(local_filepath):
                 head = {
@@ -58,8 +59,9 @@ class FtpClient(object):
         except Exception as e:
             print(e)
 
-    def get(self, remote_filepath, local_file_path):
+    def get(self, cmd, remote_filepath, local_file_path):
         """从服务端下载文件"""
+        cmd, remote_filepath, *local_file_path = cmd.strip().split()
         head = {
             "action": "get",
             "filepath": remote_filepath
@@ -99,12 +101,6 @@ class FtpClient(object):
             print(recv_file_md5, server_file_md5)
             if recv_file_md5 == server_file_md5:
                 return "0000"
-            else:
-                pass
-
-
-class FtpClientAccount(FtpClient):
-    """ftp客户端账户类"""
 
     def register(self, username, password):
         """用户注册"""
@@ -123,7 +119,74 @@ class FtpClientAccount(FtpClient):
             "password": password
         }
         self.client.send(json.dumps(info_dict).encode())
-        return self.client.recv(1024).decode()
+        server_recv_size = int(self.client.recv(1024))
+        self.client.send(b'0000')
+        recv_size = 0
+        data_list = []
+        while recv_size < server_recv_size:
+            data = self.client.recv(min(1024, server_recv_size - recv_size))
+            data_list.append(data)
+            recv_size += len(data)
+        recv_data = b''.join(data_list).decode()
+        recv_dict = json.loads(recv_data)
+        recv_status = recv_dict.get("status", 0)
+        if recv_status == '0000':
+            recv_dir = recv_dict.get("dir")
+            self.dir = recv_dir
+        return recv_status
+
+    def cd(self, command):
+        """切换目录"""
+        cmd, new_dir = command.strip().split(maxsplit=1)
+        cmd_dict = {"action": cmd, "dir": new_dir}
+        self.client.send(json.dumps(cmd_dict, ensure_ascii=False).encode())
+        server_response = self.client.recv(1024).decode()
+        if server_response == '4000':
+            return False
+        self.dir = server_response
+
+    def ls(self, command):
+        """查看目录下的子目录和文件"""
+        cmd, *new_dir = command.strip().split()
+        if not new_dir:
+            new_dir = self.dir
+        cmd_dict = {"action": cmd, "dir": new_dir}
+        self.client.send(json.dumps(cmd_dict, ensure_ascii=False).encode())
+        server_response_size = int(self.client.recv(1024).decode())
+        self.client.send(b'0000')
+        recv_size = 0
+        recv_data_list = []
+        while recv_size < server_response_size:
+            data = self.client.recv(
+                min(1024, server_response_size - recv_size))
+            recv_size += len(data)
+            recv_data_list.append(data)
+        cmd_result = b''.join(recv_data_list)
+        print(cmd_result.decode())
+
+
+class InterActive(FtpClient):
+    """与用户交互"""
+
+    def interactive(self):
+        command = input("请输入指令：\n{}#".format(self.dir)).strip()
+        if command == 'exit':
+            exit("GoodBye")
+        self.route(command)
+
+    def login(self):
+        username = input("请输入用户名:\n>>").strip()
+        password = input("请输入密码：\n>>").strip()
+        return super(InterActive, self).login(username, password)
+
+    def register(self):
+        username = input("请输入用户名:\n>>").strip()
+        password = input("请输入密码：\n>>").strip()
+        return super(InterActive, self).register(username, password)
+
+
+def main():
+    choice = input()
 
 
 if __name__ == '__main__':
