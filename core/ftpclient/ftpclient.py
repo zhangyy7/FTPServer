@@ -3,7 +3,14 @@
 import socket
 import hashlib
 import os
+import sys
 import json
+
+base_dir = os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(base_dir)
+
+from conf import settings
 
 
 class FtpClient(object):
@@ -18,12 +25,16 @@ class FtpClient(object):
 
     def route(self, cmd):
         """判断cmd是否存在，存在则执行cmd指令"""
-        action, *_ = cmd.split()
-        if hasattr(self, action):
-            func = getattr(self, action)
-            return func(self, cmd)
+        if cmd:
+            action, *_ = cmd.split(maxsplit=1)
+            if hasattr(self, action):
+                func = getattr(self, action)
+                print(cmd)
+                return func(cmd)
+            else:
+                raise AttributeError("指令不正确")
         else:
-            raise AttributeError("指令不正确")
+            print("命令不能是空值")
 
     def put(self, cmd):
         """上传文件到客户端"""
@@ -109,6 +120,7 @@ class FtpClient(object):
             "username": username,
             "password": password
         }
+        print(info_dict)
         self.client.send(json.dumps(info_dict, ensure_ascii=False).encode())
         return self.client.recv(1024).decode()
 
@@ -120,6 +132,7 @@ class FtpClient(object):
         }
         self.client.send(json.dumps(info_dict).encode())
         server_recv_size = int(self.client.recv(1024))
+        # print(server_recv_size)
         self.client.send(b'0000')
         recv_size = 0
         data_list = []
@@ -129,7 +142,8 @@ class FtpClient(object):
             recv_size += len(data)
         recv_data = b''.join(data_list).decode()
         recv_dict = json.loads(recv_data)
-        recv_status = recv_dict.get("status", 0)
+        print(recv_dict)
+        recv_status = recv_dict.get("status_code", 0)
         if recv_status == '0000':
             recv_dir = recv_dict.get("dir")
             self.dir = recv_dir
@@ -137,7 +151,7 @@ class FtpClient(object):
 
     def cd(self, command):
         """切换目录"""
-        cmd, new_dir = command.strip().split(maxsplit=1)
+        cmd, *new_dir = command.strip().split(maxsplit=1)
         cmd_dict = {"action": cmd, "dir": new_dir}
         self.client.send(json.dumps(cmd_dict, ensure_ascii=False).encode())
         server_response = self.client.recv(1024).decode()
@@ -153,6 +167,9 @@ class FtpClient(object):
         cmd_dict = {"action": cmd, "dir": new_dir}
         self.client.send(json.dumps(cmd_dict, ensure_ascii=False).encode())
         server_response_size = int(self.client.recv(1024).decode())
+        print(server_response_size)
+        if server_response_size == 1000:
+            return
         self.client.send(b'0000')
         recv_size = 0
         recv_data_list = []
@@ -186,10 +203,50 @@ class InterActive(FtpClient):
 
 
 def main():
-    choice = input()
+    while True:
+        try:
+            ip = input("请输入IP服务器IP地址：\n>>").strip()
+            port = int(input("请输入端口号：\n>>").strip())
+            conn = InterActive(ip, port)
+            break
+        except ValueError:
+            print("端口号必须是数字！")
+            continue
+        except ConnectionRefusedError:
+            exit("服务端未开启，请联系管理员！")
+    while True:
+        choice = input("1.注册  2.登录")
+        if choice == "1":
+            while True:
+
+                result = conn.register()
+                print("result", result)
+                if result == "0000":
+                    break
+                else:
+                    print(result, settings.ERROR_CODE.get(result))
+        if choice == "2":
+            print("开始登录")
+            result = conn.login()
+            print("result", result)
+            if result == "0000":
+                break
+            else:
+                print(settings.ERROR_CODE.get(result))
+        if choice == "exit":
+            exit("Goodbye")
+        else:
+            continue
+    while True:
+        try:
+            conn.interactive()
+        except ConnectionAbortedError:
+            print("服务器没有这个指令")
+            continue
 
 
 if __name__ == '__main__':
-    client = FtpClient('localhost', 9999)
-    # client.put(r'D:\Temp\11111.JPG', '123')
-    client.get(r'11111.JPG', r'D:\QMDownload')
+    # client = FtpClient('localhost', 9999)
+    # # client.put(r'D:\Temp\11111.JPG', '123')
+    # client.get(r'11111.JPG', r'D:\QMDownload')
+    main()

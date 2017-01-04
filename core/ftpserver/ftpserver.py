@@ -29,17 +29,19 @@ class FtpServer(socketserver.BaseRequestHandler):
                     break
                 head_str = head.decode()
                 head_dict = json.loads(head_str)
-                # print("size:", head_dict["size"], type(head_dict["size"]))
+                print(head_dict)
                 action = head_dict.get("action", 0)
                 if not action:
+                    print("请求异常")
                     self.request.send(b'6000')  # 请求有异常
                     break
                 else:
                     if hasattr(self, action):
                         func = getattr(self, action)
-                        return func(head_dict)
+                        func(head_dict)
                     else:
                         self.request.send(b'1000')  # 指令错误
+                        print("没有这个指令")
                         break
             except Exception as e:
                 print(e)
@@ -107,31 +109,36 @@ class FtpServer(socketserver.BaseRequestHandler):
 
     def register(self, userinfo_dict):
         """处理用户的注册请求"""
+        print("开始注册")
+        print(userinfo_dict)
         client_username = userinfo_dict.get("username", 0)
         client_password = userinfo_dict.get("password", 0)
-        if all(client_username, client_password):
-            if os.path.isfile(
-                    os.path.join(settings.DATA_PATH, client_username)):
+        if all((client_username, client_password)):
+            user_account_path = os.path.join(
+                settings.DATA_PATH, client_username)
+            user_home_path = os.path.join(
+                settings.HOME_PATH, client_username)
+            if os.path.isfile(user_account_path):
                 return self.request.send(b'5000')  # 用户已存在
-            os.mkdir(settings.HOME_PATH, client_username)  # 创建用户的家目录
-            with open(
-                    os.path.join(settings.DATA_PATH, client_username),
-                    'w') as f:
+            os.mkdir(user_home_path)  # 创建用户的家目录
+            with open(user_account_path, 'w') as f:
                 userinfo = {"username": client_username,
                             "password": client_password}
                 json.dump(userinfo, f, ensure_ascii=False)
+            print("注册成功")
             return self.request.send(b'0000')
         else:
             return self.request.send(b'6000')  # 请求有异常
 
     def login(self, userinfo_dict):
         """用户登录"""
+        print("开始登录")
+        print(userinfo_dict)
         client_username = userinfo_dict.get("username", 0)
         client_password = userinfo_dict.get("password", 0)
         if any((not client_username, not client_password)):  # 有任意一个条件为假
             return self.request.send(b'6000')  # 请求有异常
-        user_path = os.path.isfile(
-            os.path.join(settings.DATA_PATH, client_username))
+        user_path = os.path.join(settings.DATA_PATH, client_username)
         if not os.path.isfile(user_path):
             return self.request.send(b'7000')  # 用户名不存在
         with open(user_path, 'r') as f:
@@ -145,10 +152,11 @@ class FtpServer(socketserver.BaseRequestHandler):
         else:
             status_code = '8000'  # 用户名或密码不正确
         msg_dict = {"status_code": status_code, "dir": self.client_home}
+        print(msg_dict)
         msg = json.dumps(msg_dict, ensure_ascii=False).encode()
         self.request.send(str(len(msg)).encode())
         self.request.recv(1024)
-        return self.request.send(json.dumps(msg, ensure_ascii=False).encode())
+        return self.request.send(msg)
 
     def other_cmd(self, cmd):
         pass
