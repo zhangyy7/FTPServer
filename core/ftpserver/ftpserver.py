@@ -6,6 +6,7 @@ import sys
 import json
 import time
 import hashlib
+import platform
 
 base_dir = os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))
@@ -20,9 +21,9 @@ class FtpServer(socketserver.BaseRequestHandler):
 
     def handle(self):
         """处理客户端请求"""
+        print("{} connect !".format(self.client_address))
         while True:
             try:
-                print("{} connect !".format(self.client_address))
                 head = self.request.recv(1024)
                 if not head:
                     print("客户端已断开")
@@ -34,7 +35,7 @@ class FtpServer(socketserver.BaseRequestHandler):
                 if not action:
                     print("请求异常")
                     self.request.send(b'6000')  # 请求有异常
-                    break
+                    continue
                 else:
                     if hasattr(self, action):
                         func = getattr(self, action)
@@ -42,7 +43,7 @@ class FtpServer(socketserver.BaseRequestHandler):
                     else:
                         self.request.send(b'1000')  # 指令错误
                         print("没有这个指令")
-                        break
+                        continue
             except Exception as e:
                 print(e)
                 break
@@ -83,15 +84,16 @@ class FtpServer(socketserver.BaseRequestHandler):
     def get(self, cmd_dict):
         """处理客户端下载文件的请求"""
         filepath = cmd_dict.get("filepath", 0)
-        server_filepath = os.path.join(settings.HOME_PATH, filepath)
-        if not server_filepath:
-            self.request.send(b'3000')  # 文件路径不存在
-        else:
-            filename = os.path.basename(server_filepath)
-            filesize = os.path.getsize(server_filepath)
-            head_dict = {"filename": filename, "size": filesize}
-            head = json.dumps(head_dict, ensure_ascii=False)
-            self.request.send(head.encode())  # 文件信息给客户端
+        print(filepath)
+        server_filepath = os.path.join(self.client_home, filepath)
+        if not os.path.isfile(server_filepath):
+            return self.request.send(b'3000')  # 文件路径不存在
+
+        filename = os.path.basename(server_filepath)
+        filesize = os.path.getsize(server_filepath)
+        head_dict = {"filename": filename, "size": filesize}
+        head = json.dumps(head_dict, ensure_ascii=False)
+        self.request.send(head.encode())  # 文件信息给客户端
         client_status_code = self.request.recv(1024).decode()
         if client_status_code == "0000":
             m = hashlib.md5()
@@ -158,8 +160,21 @@ class FtpServer(socketserver.BaseRequestHandler):
         self.request.recv(1024)
         return self.request.send(msg)
 
-    def other_cmd(self, cmd):
-        pass
+    def ls(self, cmd):
+        ls_dir = cmd.get("dir")
+        myplatform = platform.uname().system
+        if myplatform == "Windows":
+            cmd = ["dir", ls_dir]
+        else:
+            cmd = "ls {}".format(ls_dir)
+        print(cmd)
+        msg = platform.subprocess.getoutput(cmd).encode()
+        self.request.send(str(len(msg)).encode())
+        self.request.recv(1024)
+        return self.request.send(msg)
+
+    def cd(self, cmd):
+        new_dir = ''
 
 
 if __name__ == '__main__':

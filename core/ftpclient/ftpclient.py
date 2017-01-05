@@ -29,12 +29,11 @@ class FtpClient(object):
             action, *_ = cmd.split(maxsplit=1)
             if hasattr(self, action):
                 func = getattr(self, action)
-                print(cmd)
                 return func(cmd)
             else:
-                raise AttributeError("指令不正确")
+                return '1000'
         else:
-            print("命令不能是空值")
+            return '1000'
 
     def put(self, cmd):
         """上传文件到客户端"""
@@ -70,16 +69,19 @@ class FtpClient(object):
         except Exception as e:
             print(e)
 
-    def get(self, cmd, remote_filepath, local_file_path):
+    def get(self, cmd):
         """从服务端下载文件"""
+        print("开始下载")
         cmd, remote_filepath, *local_file_path = cmd.strip().split()
         head = {
             "action": "get",
             "filepath": remote_filepath
         }
         self.client.send(json.dumps(head).encode('utf-8'))  # 发送下载请求
+        print("发送请求给服务端")
         server_response = self.client.recv(1024).decode('utf-8')
-        if server_response == '9995':  # 服务端返回异常状态码
+        print("get:first response:", server_response)
+        if server_response == '3000':  # 服务端返回异常状态码
             return
         else:  # 服务端返回的不是异常状态
             head_dict = json.loads(server_response)
@@ -146,25 +148,29 @@ class FtpClient(object):
         recv_status = recv_dict.get("status_code", 0)
         if recv_status == '0000':
             recv_dir = recv_dict.get("dir")
-            self.dir = recv_dir
+            self.mydir = recv_dir
         return recv_status
 
     def cd(self, command):
         """切换目录"""
         cmd, *new_dir = command.strip().split(maxsplit=1)
-        cmd_dict = {"action": cmd, "dir": new_dir}
+        print(new_dir)
+        cmd_dict = {"action": cmd, "dir": new_dir[]}
         self.client.send(json.dumps(cmd_dict, ensure_ascii=False).encode())
         server_response = self.client.recv(1024).decode()
         if server_response == '4000':
-            return False
-        self.dir = server_response
+            return '4000'
+        self.mydir = server_response
+        return "0000"
 
     def ls(self, command):
         """查看目录下的子目录和文件"""
         cmd, *new_dir = command.strip().split()
+        print(new_dir)
         if not new_dir:
-            new_dir = self.dir
-        cmd_dict = {"action": cmd, "dir": new_dir}
+            new_dir.append(self.mydir)
+        cmd_dict = {"action": cmd, "dir": new_dir[0]}
+        print(cmd_dict)
         self.client.send(json.dumps(cmd_dict, ensure_ascii=False).encode())
         server_response_size = int(self.client.recv(1024).decode())
         print(server_response_size)
@@ -180,13 +186,14 @@ class FtpClient(object):
             recv_data_list.append(data)
         cmd_result = b''.join(recv_data_list)
         print(cmd_result.decode())
+        return
 
 
 class InterActive(FtpClient):
     """与用户交互"""
 
     def interactive(self):
-        command = input("请输入指令：\n{}#".format(self.dir)).strip()
+        command = input("请输入指令：\n{}#".format(self.mydir)).strip()
         if command == 'exit':
             exit("GoodBye")
         self.route(command)
@@ -241,7 +248,6 @@ def main():
         try:
             conn.interactive()
         except ConnectionAbortedError:
-            print("服务器没有这个指令")
             continue
 
 
