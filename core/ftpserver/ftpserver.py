@@ -2,16 +2,10 @@
 # -*-coding: utf-8 -*-
 import socketserver
 import os
-import sys
 import json
 import time
 import hashlib
 import platform
-
-base_dir = os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(base_dir)
-
 
 from conf import settings
 
@@ -53,13 +47,7 @@ class FtpServer(socketserver.BaseRequestHandler):
         filename = cmd_dict["filename"]
         size = int(cmd_dict["size"])
         self.request.send(b'ok')
-        with open(
-            os.path.join(
-                os.path.dirname(
-                    os.path.dirname(
-                        os.path.dirname(
-                            os.path.abspath(__file__)))),
-                'home', filename), 'wb') as f:
+        with open(os.path.join(self.client_home, filename), 'wb') as f:
             recv_size = 0
             start = time.time()
             m = hashlib.md5()
@@ -174,7 +162,12 @@ class FtpServer(socketserver.BaseRequestHandler):
         return self.request.send(msg)
 
     def cd(self, cmd):
-        new_dir = ''
+        pass
+
+
+def main():
+    server = socketserver.ThreadingTCPServer(('0.0.0.0', 9999), FtpServer)
+    server.serve_forever()
 
 
 if __name__ == '__main__':
