@@ -236,6 +236,7 @@ def main():
                 result = conn.register()
                 # print("result", result)
                 if result == "0000":
+                    print("注册成功，请登录！")
                     break
                 else:
                     print(result, settings.ERROR_CODE.get(result))
@@ -244,6 +245,7 @@ def main():
             result = conn.login()
             # print("result", result)
             if result == "0000":
+                print("登录成功！")
                 break
             else:
                 print(settings.ERROR_CODE.get(result))

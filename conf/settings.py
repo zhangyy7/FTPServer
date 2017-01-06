@@ -6,8 +6,14 @@ import os
 HOME_PATH = os.path.join(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))), 'home')
 
+if not os.path.exists(HOME_PATH):
+    os.makedirs(HOME_PATH)
+
 DATA_PATH = os.path.join(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))), 'data')
+
+if not os.path.exists(DATA_PATH):
+    os.makedirs(DATA_PATH)
 
 ERROR_CODE = {
     "0000": "成功",

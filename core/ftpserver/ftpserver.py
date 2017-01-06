@@ -167,6 +167,7 @@ class FtpServer(socketserver.BaseRequestHandler):
 
 def main():
     server = socketserver.ThreadingTCPServer(('0.0.0.0', 9999), FtpServer)
+    print("服务启动成功！")
     server.serve_forever()
 
 
