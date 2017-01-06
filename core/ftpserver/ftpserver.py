@@ -124,14 +124,21 @@ class FtpServer(socketserver.BaseRequestHandler):
     def login(self, userinfo_dict):
         """用户登录"""
         print("开始登录")
-        print(userinfo_dict)
+        # print(userinfo_dict)
         client_username = userinfo_dict.get("username", 0)
         client_password = userinfo_dict.get("password", 0)
         if any((not client_username, not client_password)):  # 有任意一个条件为假
-            return self.request.send(b'6000')  # 请求有异常
+            msg = json.dumps({"status_code": "6000"}).encode()
+            self.request.send(str(len(msg)).encode())
+            self.request.recv(1024)
+            return self.request.send(msg)  # 请求有异常
         user_path = os.path.join(settings.DATA_PATH, client_username)
         if not os.path.isfile(user_path):
-            return self.request.send(b'7000')  # 用户名不存在
+            msg = json.dumps({"status_code": "7000"}).encode()
+            self.request.send(str(len(msg)).encode())
+            self.request.recv(1024)
+            return self.request.send(msg)  # 用户名不存在
+            print("没返回？")
         with open(user_path, 'r') as f:
             userinfo = json.load(f)
         username = userinfo.get("username", 0)
@@ -142,7 +149,8 @@ class FtpServer(socketserver.BaseRequestHandler):
             self.current_dir = self.client_home_dir
             status_code = '0000'
         else:
-            status_code = '8000'  # 用户名或密码不正确
+            msg = json.dumps({"status_code": "8000"})
+            return self.request.send(msg.encode())
         msg_dict = {"status_code": status_code, "dir": self.client_home_dir}
         print(msg_dict)
         msg = json.dumps(msg_dict, ensure_ascii=False).encode()

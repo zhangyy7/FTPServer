@@ -5,6 +5,8 @@ import hashlib
 import os
 import json
 import getpass
+import sys
+import time
 
 from conf import settings
 
@@ -34,7 +36,7 @@ class FtpClient(object):
     def put(self, cmd):
         """上传文件到客户端"""
         cmd, local_filepath, *remote_filepath = cmd.strip().split()
-        print(local_filepath)
+        # print(local_filepath)
         try:
             if os.path.isfile(local_filepath):
                 head = {
@@ -47,20 +49,25 @@ class FtpClient(object):
                 }
                 self.client.send(json.dumps(
                     head, ensure_ascii=False).encode(encoding='utf_8'))
-                print("发送head完毕")
+                # print("发送head完毕")
                 server_response = self.client.recv(8192)
-                print(server_response)
+                # print(server_response)
                 m = hashlib.md5()
+                start = time.time()
                 with open(local_filepath, 'rb') as f:
+                    complete_size = 0
                     for line in f:
                         m.update(line)
                         self.client.send(line)
+                        complete_size += len(line)
+                        self.progressbar(complete_size, head.get("size"))
                     else:
+                        # print(time.time() - start)
                         file_md5 = m.hexdigest()
                         print("文件{}发送完毕！".format(local_filepath))
                 self.client.send(file_md5.encode('utf-8'))
                 server_file_md5 = self.client.recv(1024).decode('utf-8')
-                print(server_file_md5, file_md5)
+                # print(server_file_md5, file_md5)
                 if server_file_md5 == file_md5:
                     return True
             else:
@@ -107,6 +114,7 @@ class FtpClient(object):
                         break
                     m.update(data)
                     f.write(data)
+                    self.progressbar(recv_size, server_file_size)
                     recv_size += len(data)
                 else:
                     print("文件接收完毕！")
@@ -116,6 +124,17 @@ class FtpClient(object):
             # print(recv_file_md5, server_file_md5)
             if recv_file_md5 == server_file_md5:
                 return "0000"
+
+    def progressbar(self, complete, total):
+        one_star = total / 100
+        star_count = int(complete // one_star)
+        precentage = complete / total
+        output_precentage = "{:.1%}".format(precentage)
+        output = output_precentage.center(star_count, "*")
+        sys.stdout.write("\r{}".format(output))
+        sys.stdout.flush()
+        if complete == total:
+            sys.stdout.write("\n")
 
     def register(self, username, password):
         """用户注册"""
@@ -240,6 +259,7 @@ def main():
                     break
                 else:
                     print(result, settings.ERROR_CODE.get(result))
+                    continue
         if choice == "2":
             print("开始登录")
             result = conn.login()
