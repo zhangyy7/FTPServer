@@ -156,27 +156,27 @@ class FtpClient(object):
         recv_status = recv_dict.get("status_code", 0)
         if recv_status == '0000':
             recv_dir = recv_dict.get("dir")
-            self.mydir = recv_dir
+            self.my_current_dir = recv_dir
         return recv_status
 
     def cd(self, command):
         """切换目录"""
         cmd, *new_dir = command.strip().split(maxsplit=1)
         # print(new_dir)
-        cmd_dict = {"action": cmd, "dir": new_dir[0]}
+        cmd_dict = {"action": cmd, "dir": new_dir}
         self.client.send(json.dumps(cmd_dict, ensure_ascii=False).encode())
         server_response = self.client.recv(1024).decode()
         if server_response == '4000':
-            return '4000'
-        self.mydir = server_response
-        return "0000"
+            return 'server_response'
+        self.my_current_dir = server_response
+        return server_response
 
     def ls(self, command):
         """查看目录下的子目录和文件"""
         cmd, *new_dir = command.strip().split()
         # print(new_dir)
         if not new_dir:
-            new_dir.append(self.mydir)
+            new_dir.append(self.my_current_dir)
         cmd_dict = {"action": cmd, "dir": new_dir[0]}
         # print(cmd_dict)
         self.client.send(json.dumps(cmd_dict, ensure_ascii=False).encode())
@@ -201,7 +201,7 @@ class InterActive(FtpClient):
     """与用户交互"""
 
     def interactive(self):
-        command = input("{}#".format(self.mydir)).strip()
+        command = input("{}#".format(self.my_current_dir)).strip()
         if command == 'exit':
             exit("GoodBye")
         self.route(command)
@@ -236,6 +236,7 @@ def main():
                 result = conn.register()
                 # print("result", result)
                 if result == "0000":
+                    print("注册成功，请登录！")
                     break
                 else:
                     print(result, settings.ERROR_CODE.get(result))
@@ -244,6 +245,7 @@ def main():
             result = conn.login()
             # print("result", result)
             if result == "0000":
+                print("登录成功！")
                 break
             else:
                 print(settings.ERROR_CODE.get(result))

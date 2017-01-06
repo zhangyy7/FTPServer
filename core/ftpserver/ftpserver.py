@@ -16,6 +16,7 @@ class FtpServer(socketserver.BaseRequestHandler):
     def handle(self):
         """处理客户端请求"""
         print("{} connect !".format(self.client_address))
+        # self.sys_sep = os.sep
         while True:
             try:
                 head = self.request.recv(1024)
@@ -47,7 +48,7 @@ class FtpServer(socketserver.BaseRequestHandler):
         filename = cmd_dict["filename"]
         size = int(cmd_dict["size"])
         self.request.send(b'ok')
-        with open(os.path.join(self.client_home, filename), 'wb') as f:
+        with open(os.path.join(self.client_home_dir, filename), 'wb') as f:
             recv_size = 0
             start = time.time()
             m = hashlib.md5()
@@ -73,7 +74,7 @@ class FtpServer(socketserver.BaseRequestHandler):
         """处理客户端下载文件的请求"""
         filepath = cmd_dict.get("filepath", 0)
         print(filepath)
-        server_filepath = os.path.join(self.client_home, filepath)
+        server_filepath = os.path.join(self.client_home_dir, filepath)
         if not os.path.isfile(server_filepath):
             return self.request.send(b'3000')  # 文件路径不存在
 
@@ -136,12 +137,13 @@ class FtpServer(socketserver.BaseRequestHandler):
         username = userinfo.get("username", 0)
         password = userinfo.get("password", 0)
         if all((client_username == username, client_password == password)):
-            self.client_home = os.path.join(
+            self.client_home_dir = os.path.join(
                 settings.HOME_PATH, client_username)
+            self.current_dir = self.client_home_dir
             status_code = '0000'
         else:
             status_code = '8000'  # 用户名或密码不正确
-        msg_dict = {"status_code": status_code, "dir": self.client_home}
+        msg_dict = {"status_code": status_code, "dir": self.client_home_dir}
         print(msg_dict)
         msg = json.dumps(msg_dict, ensure_ascii=False).encode()
         self.request.send(str(len(msg)).encode())
@@ -162,11 +164,33 @@ class FtpServer(socketserver.BaseRequestHandler):
         return self.request.send(msg)
 
     def cd(self, cmd):
-        pass
+        """处理客户端切换目录请求"""
+        new_dir = cmd.get("new_dir", [])
+        slice_start = len(self.client_home_dir)
+        current_dir_list = self.current_dir.split(os.sep)
+        if not new_dir:
+            self.current_dir = self.client_home_dir
+        if new_dir[0] == "..":
+            new_current_dir_list = current_dir_list[slice_start:-1]
+            self.current_dir = os.path.join(
+                self.client_home_dir, os.sep.join(new_current_dir_list))
+        else:
+            current_dir_list.append(new_dir[0])
+            self.current_dir = os.sep.join(current_dir_list)
+        if os.path.isdir(self.current_dir):
+            status_code = '0000'
+        else:
+            status_code = '3000'
+        msg_dict = {"status_code": status_code, "new_dir": self.current_dir}
+        msg = json.dumps(msg_dict, ensure_ascii=False).encode()
+        self.request.send(str(len(msg)).encode())  # 发送结果长度
+        self.request.recv(1024)
+        return self.request.send(msg)
 
 
 def main():
     server = socketserver.ThreadingTCPServer(('0.0.0.0', 9999), FtpServer)
+    print("服务启动成功！")
     server.serve_forever()
 
 
