@@ -3,12 +3,8 @@
 import socket
 import hashlib
 import os
-import sys
 import json
-
-base_dir = os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(base_dir)
+import getpass
 
 from conf import settings
 
@@ -38,12 +34,15 @@ class FtpClient(object):
     def put(self, cmd):
         """上传文件到客户端"""
         cmd, local_filepath, *remote_filepath = cmd.strip().split()
+        print(local_filepath)
         try:
             if os.path.isfile(local_filepath):
                 head = {
                     "action": "put",
-                    "filename": os.path.basename(local_filepath),  # 获取文件名
-                    "size": os.path.getsize(local_filepath),  # 获取文件大小
+                    # 获取文件名
+                    "filename": os.path.basename(local_filepath),
+                    # 获取文件大小
+                    "size": os.path.getsize(local_filepath),
                     "target_path": remote_filepath
                 }
                 self.client.send(json.dumps(
@@ -72,15 +71,18 @@ class FtpClient(object):
     def get(self, cmd):
         """从服务端下载文件"""
         print("开始下载")
-        cmd, remote_filepath, *local_file_path = cmd.strip().split()
+        try:
+            cmd, remote_filepath, local_file_path = cmd.strip().split()
+        except ValueError:
+            return print("请告诉我要把文件下载到哪个目录")
         head = {
             "action": "get",
             "filepath": remote_filepath
         }
         self.client.send(json.dumps(head).encode('utf-8'))  # 发送下载请求
-        print("发送请求给服务端")
+        # print("发送请求给服务端")
         server_response = self.client.recv(1024).decode('utf-8')
-        print("get:first response:", server_response)
+        # print("get:first response:", server_response)
         if server_response == '3000':  # 服务端返回异常状态码
             return
         else:  # 服务端返回的不是异常状态
@@ -111,22 +113,28 @@ class FtpClient(object):
             self.client.send("0000".encode())  # 告诉服务器我已经接收完毕了
             recv_file_md5 = m.hexdigest()
             server_file_md5 = self.client.recv(1024).decode()
-            print(recv_file_md5, server_file_md5)
+            # print(recv_file_md5, server_file_md5)
             if recv_file_md5 == server_file_md5:
                 return "0000"
 
     def register(self, username, password):
         """用户注册"""
+        m = hashlib.md5()
+        m.update(password.encode())
+        password = m.hexdigest()
         info_dict = {
             "action": "register",
             "username": username,
             "password": password
         }
-        print(info_dict)
+        # print(info_dict)
         self.client.send(json.dumps(info_dict, ensure_ascii=False).encode())
         return self.client.recv(1024).decode()
 
     def login(self, username, password):
+        m = hashlib.md5()
+        m.update(password.encode())
+        password = m.hexdigest()
         info_dict = {
             "action": "login",
             "username": username,
@@ -144,7 +152,7 @@ class FtpClient(object):
             recv_size += len(data)
         recv_data = b''.join(data_list).decode()
         recv_dict = json.loads(recv_data)
-        print(recv_dict)
+        # print(recv_dict)
         recv_status = recv_dict.get("status_code", 0)
         if recv_status == '0000':
             recv_dir = recv_dict.get("dir")
@@ -154,8 +162,8 @@ class FtpClient(object):
     def cd(self, command):
         """切换目录"""
         cmd, *new_dir = command.strip().split(maxsplit=1)
-        print(new_dir)
-        cmd_dict = {"action": cmd, "dir": new_dir[]}
+        # print(new_dir)
+        cmd_dict = {"action": cmd, "dir": new_dir[0]}
         self.client.send(json.dumps(cmd_dict, ensure_ascii=False).encode())
         server_response = self.client.recv(1024).decode()
         if server_response == '4000':
@@ -166,14 +174,14 @@ class FtpClient(object):
     def ls(self, command):
         """查看目录下的子目录和文件"""
         cmd, *new_dir = command.strip().split()
-        print(new_dir)
+        # print(new_dir)
         if not new_dir:
             new_dir.append(self.mydir)
         cmd_dict = {"action": cmd, "dir": new_dir[0]}
-        print(cmd_dict)
+        # print(cmd_dict)
         self.client.send(json.dumps(cmd_dict, ensure_ascii=False).encode())
         server_response_size = int(self.client.recv(1024).decode())
-        print(server_response_size)
+        # print(server_response_size)
         if server_response_size == 1000:
             return
         self.client.send(b'0000')
@@ -193,19 +201,19 @@ class InterActive(FtpClient):
     """与用户交互"""
 
     def interactive(self):
-        command = input("请输入指令：\n{}#".format(self.mydir)).strip()
+        command = input("{}#".format(self.mydir)).strip()
         if command == 'exit':
             exit("GoodBye")
         self.route(command)
 
     def login(self):
         username = input("请输入用户名:\n>>").strip()
-        password = input("请输入密码：\n>>").strip()
+        password = getpass.getpass("请输入密码：\n>>").strip()
         return super(InterActive, self).login(username, password)
 
     def register(self):
         username = input("请输入用户名:\n>>").strip()
-        password = input("请输入密码：\n>>").strip()
+        password = getpass.getpass("请输入密码：\n>>").strip()
         return super(InterActive, self).register(username, password)
 
 
@@ -225,9 +233,8 @@ def main():
         choice = input("1.注册  2.登录")
         if choice == "1":
             while True:
-
                 result = conn.register()
-                print("result", result)
+                # print("result", result)
                 if result == "0000":
                     break
                 else:
@@ -235,7 +242,7 @@ def main():
         if choice == "2":
             print("开始登录")
             result = conn.login()
-            print("result", result)
+            # print("result", result)
             if result == "0000":
                 break
             else:
