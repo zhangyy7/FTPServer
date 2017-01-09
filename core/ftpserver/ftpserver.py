@@ -138,7 +138,6 @@ class FtpServer(socketserver.BaseRequestHandler):
             self.request.send(str(len(msg)).encode())
             self.request.recv(1024)
             return self.request.send(msg)  # 用户名不存在
-            print("没返回？")
         with open(user_path, 'r') as f:
             userinfo = json.load(f)
         username = userinfo.get("username", 0)
@@ -173,26 +172,31 @@ class FtpServer(socketserver.BaseRequestHandler):
 
     def cd(self, cmd):
         """处理客户端切换目录请求"""
-        new_dir = cmd.get("new_dir", [])
+        print("切换目录")
+        new_dir = cmd.get("dir", [])
         slice_start = len(self.client_home_dir)
         current_dir_list = self.current_dir.split(os.sep)
         if not new_dir:
             self.current_dir = self.client_home_dir
-        if new_dir[0] == "..":
+        elif new_dir[0] == "..":
             new_current_dir_list = current_dir_list[slice_start:-1]
             self.current_dir = os.path.join(
                 self.client_home_dir, os.sep.join(new_current_dir_list))
         else:
             current_dir_list.append(new_dir[0])
             self.current_dir = os.sep.join(current_dir_list)
+        print(self.current_dir)
         if os.path.isdir(self.current_dir):
             status_code = '0000'
         else:
             status_code = '3000'
+        print(status_code)
         msg_dict = {"status_code": status_code, "new_dir": self.current_dir}
         msg = json.dumps(msg_dict, ensure_ascii=False).encode()
         self.request.send(str(len(msg)).encode())  # 发送结果长度
+        print(len(msg))
         self.request.recv(1024)
+        print("客户端已已确认")
         return self.request.send(msg)
 
 

@@ -181,14 +181,26 @@ class FtpClient(object):
     def cd(self, command):
         """切换目录"""
         cmd, *new_dir = command.strip().split(maxsplit=1)
-        # print(new_dir)
+        print(new_dir)
         cmd_dict = {"action": cmd, "dir": new_dir}
         self.client.send(json.dumps(cmd_dict, ensure_ascii=False).encode())
-        server_response = self.client.recv(1024).decode()
-        if server_response == '4000':
-            return 'server_response'
-        self.my_current_dir = server_response
-        return server_response
+        try:
+            total_size = int(self.client.recv(1024).decode())
+        except ValueError:
+            print("服务器返回的结果长度不是数字")
+            return
+        print("total_size", total_size)
+        self.client.send(b'0000')
+        recv_size = 0
+        recv_data_list = []
+        while recv_size < total_size:
+            data = self.client.recv(min(1024, total_size - recv_size))
+            recv_data_list.append(data)
+            recv_size += len(data)
+        recv_data = b"".join(recv_data_list).decode()
+        response_dict = json.loads(recv_data)
+        self.my_current_dir = response_dict.get("new_dir")
+        return response_dict.get("status_code")
 
     def ls(self, command):
         """查看目录下的子目录和文件"""
