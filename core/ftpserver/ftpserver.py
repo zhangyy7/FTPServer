@@ -186,10 +186,11 @@ class FtpServer(socketserver.BaseRequestHandler):
             print(self.current_dir)
         else:
             current_dir_list.append(new_dir[0])
+            current_dir_temp = os.sep.join(current_dir_list)
         print(self.current_dir)
-        if os.path.isdir(self.current_dir):
+        if os.path.isdir(current_dir_temp):
             status_code = '0000'
-            self.current_dir = os.sep.join(current_dir_list)
+            self.current_dir = current_dir_temp
         else:
             status_code = '3000'
         print(status_code)
