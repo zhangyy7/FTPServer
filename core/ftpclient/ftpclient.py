@@ -199,6 +199,7 @@ class FtpClient(object):
             recv_size += len(data)
         recv_data = b"".join(recv_data_list).decode()
         response_dict = json.loads(recv_data)
+        print("recv_dir:", response_dict.get("new_dir"))
         self.my_current_dir = response_dict.get("new_dir")
         return response_dict.get("status_code")
 

@@ -180,8 +180,10 @@ class FtpServer(socketserver.BaseRequestHandler):
             self.current_dir = self.client_home_dir
         elif new_dir[0] == "..":
             new_current_dir_list = current_dir_list[slice_start:-1]
+            print("new_current_dir_list", os.sep.join(new_current_dir_list))
             self.current_dir = os.path.join(
                 self.client_home_dir, os.sep.join(new_current_dir_list))
+            print(self.current_dir)
         else:
             current_dir_list.append(new_dir[0])
         print(self.current_dir)
