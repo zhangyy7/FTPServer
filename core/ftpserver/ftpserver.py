@@ -6,8 +6,13 @@ import json
 import time
 import hashlib
 import platform
+import logging
 
 from conf import settings
+
+
+logging.config.dictConfig(settings.LOGGING_DIC)
+logger = logging.getLogger(__name__)
 
 
 class FtpServer(socketserver.BaseRequestHandler):
@@ -24,11 +29,11 @@ class FtpServer(socketserver.BaseRequestHandler):
                     print("客户端已断开")
                     break
                 head_str = head.decode()
+                logger.debug(head_str)
                 head_dict = json.loads(head_str)
-                print(head_dict)
                 action = head_dict.get("action", 0)
                 if not action:
-                    print("请求异常")
+                    logger.error("not find action")
                     self.request.send(b'6000')  # 请求有异常
                     continue
                 else:
@@ -37,20 +42,34 @@ class FtpServer(socketserver.BaseRequestHandler):
                         func(head_dict)
                     else:
                         self.request.send(b'1000')  # 指令错误
-                        print("没有这个指令")
+                        logger.error("cmd error:not find {}".format(action))
                         continue
             except Exception as e:
-                print(e)
+                logger.critical(e)
                 break
 
     def put(self, cmd_dict):
         """处理客户端上传文件的请求"""
+        logger.debug(cmd_dict)
         filename = cmd_dict["filename"]
-        size = int(cmd_dict["size"])
-        self.request.send(b'ok')
-        with open(os.path.join(self.client_home_dir, filename), 'wb') as f:
+        target_path_list = cmd_dict.get("target_path")
+        if not target_path_list:
+            target_path = self.current_dir
+            logger.debug(target_path)
+        else:
+            target_path = os.path.join(self.current_dir, target_path_list[0])
+            logger.debug(target_path)
+        try:
+            size = int(cmd_dict["size"])
+        except ValueError:
+            logger.critical("size must be a integer")
+        if not os.path.isdir(target_path):
+            return self.request.send(b'3000')
+        else:
+            self.request.send(b'0000')
+        with open(os.path.join(target_path, filename), 'wb') as f:
             recv_size = 0
-            start = time.time()
+            # start = time.time()
             m = hashlib.md5()
             while recv_size < size:
                 data = self.request.recv(min(1024, size - recv_size))
@@ -59,24 +78,28 @@ class FtpServer(socketserver.BaseRequestHandler):
                 recv_size += len(data)
             else:
                 new_file_md5 = m.hexdigest()
-                print(new_file_md5)
-                print(time.time() - start)
-                print('接收到的文件大小为：', recv_size)
+                # print(new_file_md5)
+                # print(time.time() - start)
+                # print('接收到的文件大小为：', recv_size)
                 print("文件{}接收成功".format(filename))
         client_file_md5 = self.request.recv(1024).decode()
-        stat_code = '0000'
+        status_code = '0000'
         if new_file_md5 != client_file_md5:
-            print("md5校验不通过")
-            stat_code = '2000'  # md5校验失败
-        self.request.send(stat_code.encode('utf-8'))
+            logger.debug("md5校验失败")
+            status_code = '2000'  # md5校验失败
+        self.request.send(status_code.encode('utf-8'))
 
     def get(self, cmd_dict):
         """处理客户端下载文件的请求"""
         filepath = cmd_dict.get("filepath", 0)
-        print(filepath)
-        server_filepath = os.path.join(self.client_home_dir, filepath)
+        # print(filepath)
+        if len(filepath.split(os.sep)) == 1:
+            server_filepath = os.path.join(self.current_dir, filepath)
+        else:
+            server_filepath = os.path.join(self.client_home_dir, filepath)
         if not os.path.isfile(server_filepath):
-            return self.request.send(b'3000')  # 文件路径不存在
+            head = json.dumps({"status_code": "3000"}, ensure_ascii=False)
+            return self.request.send(head.encode())  # 文件路径不存在
 
         filename = os.path.basename(server_filepath)
         filesize = os.path.getsize(server_filepath)

@@ -88,20 +88,27 @@ class FtpClient(object):
         }
         self.client.send(json.dumps(head).encode('utf-8'))  # 发送下载请求
         # print("发送请求给服务端")
-        server_response = self.client.recv(1024).decode('utf-8')
+        server_response = json.loads(self.client.recv(1024).decode('utf-8'))
         # print("get:first response:", server_response)
-        if server_response == '3000':  # 服务端返回异常状态码
-            return
+        if server_response.get("status_code", 0) == '3000':  # 服务端返回异常状态码
+            return '3000'
         else:  # 服务端返回的不是异常状态
-            head_dict = json.loads(server_response)
-            server_file_name = head_dict.get("filename", 0)
+            server_file_name = server_response.get("filename", 0)
             try:
-                server_file_size = int(head_dict.get("size", 0))
+                server_file_size = int(server_response.get("size", 0))
             except ValueError as e:
                 print(e)
-                return
+                return e
             if all((server_file_name, server_file_size)):  # 判断服务端返回的2个数据是否正常
-                self.client.send("0000".encode())  # 告诉服务端我已经准备好接收文件了
+                temp_file_path = os.path.join(
+                    local_file_path, "{}.temp".format(server_file_name))
+                if os.path.isfile(temp_file_path):
+                    received_size = os.path.getsize(temp_file_path)
+                else:
+                    received_size = 0
+                request_info = {"status_code": "0000",
+                                "received_size": received_size}
+
             else:
                 return self.client.send('9999'.encode())  # 告诉服务端发给我的数据有异常
             m = hashlib.md5()
