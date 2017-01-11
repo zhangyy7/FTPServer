@@ -7,6 +7,7 @@ import json
 import getpass
 import sys
 import time
+import shutil
 
 from conf import settings
 
@@ -108,23 +109,28 @@ class FtpClient(object):
                     received_size = 0
                 request_info = {"status_code": "0000",
                                 "received_size": received_size}
+                self.client.send(
+                    json.dumps(request_info).encode()
+                )  # 发送成功状态码和已接收的文件大小给服务器
 
             else:
-                return self.client.send('9999'.encode())  # 告诉服务端发给我的数据有异常
+                # 告诉服务端发给我的数据有异常,并返回
+                return self.client.send(
+                    json.dumps({"status_code": "9000"}).encode())
             m = hashlib.md5()
-            with open(os.path.join(local_file_path, server_file_name), 'wb') as f:
-                recv_size = 0
-                while recv_size < server_file_size:  # 开始接收文件
+            with open(temp_file_path, 'ab+') as f:
+                while received_size < server_file_size:  # 开始接收文件
                     data = self.client.recv(
-                        min(1024, server_file_size - recv_size))
+                        min(1024, server_file_size - received_size))
                     if not data:
                         break
                     m.update(data)
                     f.write(data)
-                    self.progressbar(recv_size, server_file_size)
-                    recv_size += len(data)
+                    self.progressbar(received_size, server_file_size)
+                    received_size += len(data)
                 else:
                     print("文件接收完毕！")
+                    # shutil.c
             self.client.send("0000".encode())  # 告诉服务器我已经接收完毕了
             recv_file_md5 = m.hexdigest()
             server_file_md5 = self.client.recv(1024).decode()
