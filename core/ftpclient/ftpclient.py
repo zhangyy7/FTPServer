@@ -6,7 +6,6 @@ import os
 import json
 import getpass
 import sys
-import time
 import shutil
 
 from conf import settings
@@ -16,11 +15,13 @@ class FtpClient(object):
     """ftp客户端"""
 
     def __init__(self, ip, port):
+        self.ip = ip
+        self.port = port
         self.client = socket.socket()
-        self.connect_to_server(ip, port)
+        self.connect_to_server(self.ip, self.port)
 
     def connect_to_server(self, ip, port):
-        self.client.connect((ip, port))
+        self.client.connect((self.ip, self.port))
 
     def route(self, cmd):
         """判断cmd是否存在，存在则执行cmd指令"""
@@ -51,10 +52,9 @@ class FtpClient(object):
                 self.client.send(json.dumps(
                     head, ensure_ascii=False).encode(encoding='utf_8'))
                 # print("发送head完毕")
-                server_response = self.client.recv(8192)
+                self.client.recv(1024)
                 # print(server_response)
                 m = hashlib.md5()
-                start = time.time()
                 with open(local_filepath, 'rb') as f:
                     complete_size = 0
                     for line in f:
@@ -87,9 +87,15 @@ class FtpClient(object):
             "action": "get",
             "filepath": remote_filepath
         }
-        self.client.send(json.dumps(head).encode('utf-8'))  # 发送下载请求
+        self.client.send(json.dumps(head).encode())  # 发送下载请求
         # print("发送请求给服务端")
-        server_response = json.loads(self.client.recv(1024).decode('utf-8'))
+        # server_response = json.loads(self.client.recv(1024).decode())
+        server_response1 = self.client.recv(1024)
+        # print("----92-----", server_response1)
+        server_response2 = server_response1.decode()
+        # print("----94-----", server_response2)
+        server_response = json.loads(server_response2)
+        # print("----96-----", server_response)
         # print("get:first response:", server_response)
         if server_response.get("status_code", 0) == '3000':  # 服务端返回异常状态码
             return '3000'
@@ -101,8 +107,9 @@ class FtpClient(object):
                 print(e)
                 return e
             if all((server_file_name, server_file_size)):  # 判断服务端返回的2个数据是否正常
-                temp_file_path = os.path.join(
-                    local_file_path, "{}.temp".format(server_file_name))
+                local_file_path_name = os.path.join(
+                    local_file_path, server_file_name)
+                temp_file_path = "{}.temp".format(local_file_path_name)
                 if os.path.isfile(temp_file_path):
                     received_size = os.path.getsize(temp_file_path)
                 else:
@@ -118,19 +125,26 @@ class FtpClient(object):
                 return self.client.send(
                     json.dumps({"status_code": "9000"}).encode())
             m = hashlib.md5()
-            with open(temp_file_path, 'ab+') as f:
-                while received_size < server_file_size:  # 开始接收文件
-                    data = self.client.recv(
-                        min(1024, server_file_size - received_size))
-                    if not data:
-                        break
-                    m.update(data)
-                    f.write(data)
-                    self.progressbar(received_size, server_file_size)
-                    received_size += len(data)
-                else:
-                    print("文件接收完毕！")
-                    # shutil.c
+            try:
+                with open(temp_file_path, 'ab+') as f:
+                    while received_size < server_file_size:  # 开始接收文件
+                        data = self.client.recv(
+                            min(1024, server_file_size - received_size))
+                        if not data:
+                            break
+                        m.update(data)
+                        f.write(data)
+                        self.progressbar(received_size, server_file_size)
+                        received_size += len(data)
+                    else:
+                        self.progressbar(received_size, server_file_size)
+                        print("文件接收完毕！")
+            except KeyboardInterrupt:
+                # return self.client.send(b"9999")  # 告诉服务器文件传输被中断了
+                self.client.close()
+                exit("谢谢使用")
+            shutil.copyfile(temp_file_path, local_file_path_name)
+            shutil.os.remove(temp_file_path)
             self.client.send("0000".encode())  # 告诉服务器我已经接收完毕了
             recv_file_md5 = m.hexdigest()
             server_file_md5 = self.client.recv(1024).decode()
@@ -149,15 +163,21 @@ class FtpClient(object):
         if complete == total:
             sys.stdout.write("\n")
 
-    def register(self, username, password):
-        """用户注册"""
+    def register(self, username, password, disk_size):
+        """
+        用户注册
+        param disk_size: 磁盘空闲大小，单位MB
+
+        """
+        bt_disk_size = disk_size * 1024 * 1024
         m = hashlib.md5()
         m.update(password.encode())
         password = m.hexdigest()
         info_dict = {
             "action": "register",
             "username": username,
-            "password": password
+            "password": password,
+            "disk_size": bt_disk_size
         }
         # print(info_dict)
         self.client.send(json.dumps(info_dict, ensure_ascii=False).encode())
@@ -173,13 +193,15 @@ class FtpClient(object):
             "password": password
         }
         self.client.send(json.dumps(info_dict).encode())
-        server_recv_size = int(self.client.recv(1024))
-        # print(server_recv_size)
+        try:
+            result_size = int(json.loads(self.client.recv(1024).decode()))
+        except ValueError:
+            return self.client.send(b'6000')
         self.client.send(b'0000')
         recv_size = 0
         data_list = []
-        while recv_size < server_recv_size:
-            data = self.client.recv(min(1024, server_recv_size - recv_size))
+        while recv_size < result_size:
+            data = self.client.recv(min(1024, result_size - recv_size))
             data_list.append(data)
             recv_size += len(data)
         recv_data = b''.join(data_list).decode()
@@ -189,6 +211,8 @@ class FtpClient(object):
         if recv_status == '0000':
             recv_dir = recv_dict.get("dir")
             self.my_current_dir = recv_dir
+            self.my_username = username
+            self.my_pwd = password
         return recv_status
 
     def cd(self, command):
@@ -242,24 +266,28 @@ class FtpClient(object):
         return
 
 
-class InterActive(FtpClient):
+class InterActive(object):
     """与用户交互"""
 
+    def __init__(self, ip, port):
+        self.client = FtpClient(ip, port)
+
     def interactive(self):
-        command = input("{}#".format(self.my_current_dir)).strip()
+        command = input("{}#".format(self.client.my_current_dir)).strip()
         if command == 'exit':
             exit("GoodBye")
-        self.route(command)
+        self.client.route(command)
 
     def login(self):
         username = input("请输入用户名:\n>>").strip()
         password = getpass.getpass("请输入密码：\n>>").strip()
-        return super(InterActive, self).login(username, password)
+        return self.client.login(username, password)
 
     def register(self):
         username = input("请输入用户名:\n>>").strip()
         password = getpass.getpass("请输入密码：\n>>").strip()
-        return super(InterActive, self).register(username, password)
+        disk_size = input("请输入您所需磁盘空间，单位MB，最大1024MB").strip()
+        return self.client.register(username, password, disk_size)
 
 
 def main():

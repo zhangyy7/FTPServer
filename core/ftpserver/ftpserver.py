@@ -3,10 +3,10 @@
 import socketserver
 import os
 import json
-import time
 import hashlib
 import platform
-import logging
+import logging.config
+import threading
 
 from conf import settings
 
@@ -24,13 +24,12 @@ class FtpServer(socketserver.BaseRequestHandler):
         # self.sys_sep = os.sep
         while True:
             try:
-                head = self.request.recv(1024)
+                head = self.request.recv(1024).decode()
                 if not head:
                     print("客户端已断开")
                     break
-                head_str = head.decode()
-                logger.debug(head_str)
-                head_dict = json.loads(head_str)
+                logger.debug(head)
+                head_dict = json.loads(head)
                 action = head_dict.get("action", 0)
                 if not action:
                     logger.error("not find action")
@@ -48,21 +47,33 @@ class FtpServer(socketserver.BaseRequestHandler):
                 logger.critical(e)
                 break
 
+    def get_dir_size(self, dirname):
+        size = 0
+        for root, dirs, files in os.walk(dirname):
+            for name in files:
+                current_path = os.path.join(root, name)
+                size += os.path.getsize(current_path)
+        return size
+
     def put(self, cmd_dict):
         """处理客户端上传文件的请求"""
         logger.debug(cmd_dict)
         filename = cmd_dict["filename"]
         target_path_list = cmd_dict.get("target_path")
+        try:
+            size = int(cmd_dict["size"])
+        except ValueError:
+            logger.critical("size must be a integer")
+            return self.request.send(b'6000')
+        used_size = self.get_dir_size(self.client_home_dir)
+        if used_size + size >= self.total_size:
+            return self.request.send(b'4444')
         if not target_path_list:
             target_path = self.current_dir
             logger.debug(target_path)
         else:
             target_path = os.path.join(self.current_dir, target_path_list[0])
             logger.debug(target_path)
-        try:
-            size = int(cmd_dict["size"])
-        except ValueError:
-            logger.critical("size must be a integer")
         if not os.path.isdir(target_path):
             return self.request.send(b'3000')
         else:
@@ -99,45 +110,68 @@ class FtpServer(socketserver.BaseRequestHandler):
             server_filepath = os.path.join(self.client_home_dir, filepath)
         if not os.path.isfile(server_filepath):
             head = json.dumps({"status_code": "3000"}, ensure_ascii=False)
+            print("---100---文件不存在", head)
             return self.request.send(head.encode())  # 文件路径不存在
 
         filename = os.path.basename(server_filepath)
         filesize = os.path.getsize(server_filepath)
         head_dict = {"filename": filename, "size": filesize}
         head = json.dumps(head_dict, ensure_ascii=False)
-        self.request.send(head.encode())  # 文件信息给客户端
-        client_status_code = self.request.recv(1024).decode()
-        if client_status_code == "0000":
+        self.request.send(head.encode())  # 发送文件信息给客户端
+        print("---108---发给客户端的数据:", head)
+        recv_info = json.loads(self.request.recv(1024).decode())
+        client_status = recv_info.get("status_code", 0)
+
+        if client_status == "0000":
+            try:
+                client_received_size = int(recv_info.get("received_size", 0))
+            except ValueError:
+                return
             m = hashlib.md5()
             with open(server_filepath, 'rb') as f:
+                f.seek(client_received_size)
                 for line in f:
+                    # recv_data = threading.Thread(
+                    #     target=self.request.recv, args=(1024,))
+                    # recv_data.start()
+                    # if not recv_data:
                     m.update(line)
                     self.request.send(line)
                 else:
                     file_md5 = m.hexdigest()
                     print("文件发送完毕！")
-            if self.request.recv(1024).decode() == "0000":
+            client_recv = self.request.recv(1024).decode()
+            if client_recv == "0000":
                 self.request.send(file_md5.encode())
+            else:
+                return
         else:
             return
 
     def register(self, userinfo_dict):
         """处理用户的注册请求"""
         print("开始注册")
-        print(userinfo_dict)
+        # print(userinfo_dict)
         client_username = userinfo_dict.get("username", 0)
         client_password = userinfo_dict.get("password", 0)
-        if all((client_username, client_password)):
+        try:
+            client_disk_size = userinfo_dict.get("disk_size", 0)
+        except ValueError:
+            return self.request.send(b'6000')
+        if all((client_username, client_password, client_disk_size)):
             user_account_path = os.path.join(
                 settings.DATA_PATH, client_username)
             user_home_path = os.path.join(
                 settings.HOME_PATH, client_username)
             if os.path.isfile(user_account_path):
                 return self.request.send(b'5000')  # 用户已存在
+            if client_disk_size > settings.USER_DISK_MAXSIZE:
+                return self.request.send(b'4000')
             os.mkdir(user_home_path)  # 创建用户的家目录
             with open(user_account_path, 'w') as f:
                 userinfo = {"username": client_username,
-                            "password": client_password}
+                            "password": client_password,
+                            "disk_size": client_disk_size}
                 json.dump(userinfo, f, ensure_ascii=False)
             print("注册成功")
             return self.request.send(b'0000')
@@ -165,16 +199,18 @@ class FtpServer(socketserver.BaseRequestHandler):
             userinfo = json.load(f)
         username = userinfo.get("username", 0)
         password = userinfo.get("password", 0)
-        if all((client_username == username, client_password == password)):
-            self.client_home_dir = os.path.join(
-                settings.HOME_PATH, client_username)
-            self.current_dir = self.client_home_dir
-            status_code = '0000'
-        else:
-            msg = json.dumps({"status_code": "8000"})
-            return self.request.send(msg.encode())
-        msg_dict = {"status_code": status_code, "dir": self.client_home_dir}
-        print(msg_dict)
+
+        if any((not client_username == username, not client_password == password)):
+            msg = json.dumps({"status_code": "8000"}).encode()
+            self.request.send(str(len(msg)).encode())
+            self.request.recv(1024)
+            return self.request.send(msg)  # 请求有异常
+
+        self.client_home_dir = os.path.join(
+            settings.HOME_PATH, client_username)
+        self.current_dir = self.client_home_dir
+        self.total_size = userinfo.get("disk_size", 0)
+        msg_dict = {"status_code": "0000", "dir": self.client_home_dir}
         msg = json.dumps(msg_dict, ensure_ascii=False).encode()
         self.request.send(str(len(msg)).encode())
         self.request.recv(1024)
