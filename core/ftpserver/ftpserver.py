@@ -30,6 +30,7 @@ class FtpServer(socketserver.BaseRequestHandler):
                     break
                 logger.debug(head)
                 head_dict = json.loads(head)
+                print(head_dict)
                 action = head_dict.get("action", 0)
                 if not action:
                     logger.error("not find action")
@@ -66,7 +67,11 @@ class FtpServer(socketserver.BaseRequestHandler):
             logger.critical("size must be a integer")
             return self.request.send(b'6000')
         used_size = self.get_dir_size(self.client_home_dir)
-        if used_size + size >= self.total_size:
+        print(used_size, type(used_size))
+        total_size = used_size + size
+        print(total_size,self.total_size)
+        if total_size >= self.total_size:
+            print("磁盘空间不够")
             return self.request.send(b'4444')
         if not target_path_list:
             target_path = self.current_dir

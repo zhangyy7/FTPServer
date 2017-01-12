@@ -52,8 +52,11 @@ class FtpClient(object):
                 self.client.send(json.dumps(
                     head, ensure_ascii=False).encode(encoding='utf_8'))
                 # print("发送head完毕")
-                self.client.recv(1024)
+                response = self.client.recv(1024).decode()
                 # print(server_response)
+                if response != "0000":
+                    print(settings.ERROR_CODE.get(response))
+                    return
                 m = hashlib.md5()
                 with open(local_filepath, 'rb') as f:
                     complete_size = 0
