@@ -89,14 +89,8 @@ class FtpClient(object):
         }
         self.client.send(json.dumps(head).encode())  # 发送下载请求
         # print("发送请求给服务端")
-        # server_response = json.loads(self.client.recv(1024).decode())
-        server_response1 = self.client.recv(1024)
-        # print("----92-----", server_response1)
-        server_response2 = server_response1.decode()
-        # print("----94-----", server_response2)
-        server_response = json.loads(server_response2)
-        # print("----96-----", server_response)
-        # print("get:first response:", server_response)
+        server_response = json.loads(self.client.recv(1024).decode())
+
         if server_response.get("status_code", 0) == '3000':  # 服务端返回异常状态码
             return '3000'
         else:  # 服务端返回的不是异常状态
@@ -169,7 +163,7 @@ class FtpClient(object):
         param disk_size: 磁盘空闲大小，单位MB
 
         """
-        bt_disk_size = disk_size * 1024 * 1024
+        bt_disk_size = int(disk_size) * 1024 * 1024
         m = hashlib.md5()
         m.update(password.encode())
         password = m.hexdigest()
@@ -218,7 +212,7 @@ class FtpClient(object):
     def cd(self, command):
         """切换目录"""
         cmd, *new_dir = command.strip().split(maxsplit=1)
-        print(new_dir)
+        # print(new_dir)
         cmd_dict = {"action": cmd, "dir": new_dir}
         self.client.send(json.dumps(cmd_dict, ensure_ascii=False).encode())
         try:
@@ -226,7 +220,7 @@ class FtpClient(object):
         except ValueError:
             print("服务器返回的结果长度不是数字")
             return
-        print("total_size", total_size)
+        # print("total_size", total_size)
         self.client.send(b'0000')
         recv_size = 0
         recv_data_list = []
@@ -236,7 +230,7 @@ class FtpClient(object):
             recv_size += len(data)
         recv_data = b"".join(recv_data_list).decode()
         response_dict = json.loads(recv_data)
-        print("recv_dir:", response_dict.get("new_dir"))
+        # print("recv_dir:", response_dict.get("new_dir"))
         self.my_current_dir = response_dict.get("new_dir")
         return response_dict.get("status_code")
 

@@ -151,11 +151,11 @@ class FtpServer(socketserver.BaseRequestHandler):
     def register(self, userinfo_dict):
         """处理用户的注册请求"""
         print("开始注册")
-        # print(userinfo_dict)
+        print(userinfo_dict)
         client_username = userinfo_dict.get("username", 0)
         client_password = userinfo_dict.get("password", 0)
         try:
-            client_disk_size = userinfo_dict.get("disk_size", 0)
+            client_disk_size = int(userinfo_dict.get("disk_size", 0))
         except ValueError:
             return self.request.send(b'6000')
         if all((client_username, client_password, client_disk_size)):

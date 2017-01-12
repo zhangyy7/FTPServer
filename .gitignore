@@ -2,6 +2,7 @@
 __pycache__/
 home/
 data/
+log/
 *.py[cod]
 *$py.class
 
