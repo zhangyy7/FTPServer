@@ -44,9 +44,12 @@ class FtpServer(socketserver.BaseRequestHandler):
                         self.request.send(b'1000')  # 指令错误
                         logger.error("cmd error:not find {}".format(action))
                         continue
+            except WindowsError:
+                print("客户端已断开")
+                break
             except Exception as e:
                 logger.critical(e)
-                break
+                continue
 
     def get_dir_size(self, dirname):
         size = 0
@@ -251,6 +254,7 @@ class FtpServer(socketserver.BaseRequestHandler):
         new_dir = cmd.get("dir", [])
         slice_start = len(self.client_home_dir)
         current_dir_list = self.current_dir.split(os.sep)
+        status_code = '0000'
         if not new_dir:
             self.current_dir = self.client_home_dir
         elif new_dir[0] == "..":
@@ -262,13 +266,12 @@ class FtpServer(socketserver.BaseRequestHandler):
         else:
             current_dir_list.append(new_dir[0])
             current_dir_temp = os.sep.join(current_dir_list)
-        print(self.current_dir)
-        if os.path.isdir(current_dir_temp):
-            status_code = '0000'
-            self.current_dir = current_dir_temp
-        else:
-            status_code = '3000'
-        print(status_code)
+            print("------265-------", self.current_dir)
+            if os.path.isdir(current_dir_temp):
+                self.current_dir = current_dir_temp
+            else:
+                status_code = '3000'
+        print("------271-------", status_code)
         msg_dict = {"status_code": status_code, "new_dir": self.current_dir}
         msg = json.dumps(msg_dict, ensure_ascii=False).encode()
         self.request.send(str(len(msg)).encode())  # 发送结果长度
