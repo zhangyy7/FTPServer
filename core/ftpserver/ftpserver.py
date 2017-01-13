@@ -56,7 +56,7 @@ class FtpServer(socketserver.BaseRequestHandler):
                 size += os.path.getsize(current_path)
         return size
 
-    def mk_dir(self, cmd_dict):
+    def mkdir(self, cmd_dict):
         """处理用户创建目录的请求"""
         dir_path = cmd_dict.get("new_dir")
         if not dir_path:

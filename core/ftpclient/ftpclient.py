@@ -243,6 +243,7 @@ class FtpClient(object):
         cmd_dict = {"action": cmd, "new_dir": new_dir}
         self.client.send(json.dumps(cmd_dict).encode())
         result = self.client.recv(1024).decode()
+        print(result)
         return result
 
     def ls(self, command):
