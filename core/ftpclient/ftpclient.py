@@ -237,6 +237,14 @@ class FtpClient(object):
         self.my_current_dir = response_dict.get("new_dir")
         return response_dict.get("status_code")
 
+    def mkdir(self, command):
+        """创建目录"""
+        cmd, new_dir = command.strip().split()
+        cmd_dict = {"action": cmd, "new_dir": new_dir}
+        self.client.send(json.dumps(cmd_dict).encode())
+        result = self.client.recv(1024).decode()
+        return result
+
     def ls(self, command):
         """查看目录下的子目录和文件"""
         cmd, *new_dir = command.strip().split()

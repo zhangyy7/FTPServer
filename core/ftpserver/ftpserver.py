@@ -56,6 +56,17 @@ class FtpServer(socketserver.BaseRequestHandler):
                 size += os.path.getsize(current_path)
         return size
 
+    def mk_dir(self, cmd_dict):
+        """处理用户创建目录的请求"""
+        dir_path = cmd_dict.get("new_dir")
+        if not dir_path:
+            return self.request.send(b"6000")
+        try:
+            os.makedirs(os.path.join(self.current_dir, dir_path))
+            return self.request.send(b'0000')
+        except Exception:
+            return self.request.send(b'2999')
+
     def put(self, cmd_dict):
         """处理客户端上传文件的请求"""
         logger.debug(cmd_dict)
@@ -69,7 +80,7 @@ class FtpServer(socketserver.BaseRequestHandler):
         used_size = self.get_dir_size(self.client_home_dir)
         print(used_size, type(used_size))
         total_size = used_size + size
-        print(total_size,self.total_size)
+        # print(total_size,self.total_size)
         if total_size >= self.total_size:
             print("磁盘空间不够")
             return self.request.send(b'4444')
