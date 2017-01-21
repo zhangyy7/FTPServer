@@ -11,8 +11,6 @@ logging.config.dictConfig(settings.LOGGING_DIC)
 logger = logging.getLogger(__name__)
 
 
-<<<<<<< HEAD
-=======
 class FtpServer(socketserver.BaseRequestHandler):
     """ftp服务器端请求处理类"""
 
@@ -279,7 +277,6 @@ class FtpServer(socketserver.BaseRequestHandler):
         return self.request.send(msg)
 
 
->>>>>>> 885490b2da4186a3acd1a42789f92ad1d95d7ef2
 def main():
     server = socketserver.ThreadingTCPServer(
         ('0.0.0.0', 9999), requesthandler.RequestHandler)
